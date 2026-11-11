@@ -7,7 +7,8 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
 import employeeRoutes from "./routes/employees.js";
 
-dotenv.config();
+dotenv.config({ override: true });
+console.log("MONGO_URI exists:", !!process.env.MONGO_URI);
 
 const app = express();
 
@@ -29,9 +30,9 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB Connected Successfully!");
   })
-  .catch((error) => {
-    console.log("MongoDB Connection Error:", error.message);
-  });
+ .catch((error) => {
+  console.error("MongoDB Connection Error:", error);
+});
 
 // Start Server
 const PORT = process.env.PORT || 5000;
