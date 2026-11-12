@@ -8,6 +8,8 @@ import authRoutes from "./routes/auth.js";
 import employeeRoutes from "./routes/employees.js";
 
 dotenv.config({ override: true });
+console.log("EMAIL_USER loaded:", !!process.env.EMAIL_USER);
+console.log("EMAIL_PASS loaded:", !!process.env.EMAIL_PASS);
 console.log("MONGO_URI exists:", !!process.env.MONGO_URI);
 
 const app = express();
