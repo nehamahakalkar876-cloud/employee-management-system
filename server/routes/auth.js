@@ -3,23 +3,44 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import nodemailer from "nodemailer";
 import crypto from "crypto";
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-}
+
 const router = express.Router();
+
+// Send OTP using Brevo HTTPS API
+async function sendOtpEmail(to, otp) {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      sender: {
+        name: "Employee Management System",
+        email: process.env.EMAIL_USER
+      },
+      to: [{ email: to }],
+      subject: "Employee Management System - Password Reset OTP",
+      textContent: `Your password reset OTP is ${otp}. It is valid for 5 minutes. Do not share it with anyone.`
+    })
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    console.error("Brevo API Error:", result);
+    throw new Error(result.message || "Brevo email sending failed");
+  }
+
+  return result;
+}
+
 // Forgot Password - Send OTP
 router.post("/forgot-password", async (req, res) => {
   console.log("FORGOT PASSWORD API CALLED");
+
   try {
     const { email } = req.body;
 
@@ -33,7 +54,6 @@ router.post("/forgot-password", async (req, res) => {
       email: email.toLowerCase()
     });
 
-    // Generic response for security
     if (!user) {
       return res.json({
         message: "If your account exists, an OTP will be sent."
@@ -53,12 +73,7 @@ router.post("/forgot-password", async (req, res) => {
 
     await user.save();
 
-   await createTransporter().sendMail({
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: "Employee Management System - Password Reset OTP",
-      text: `Your password reset OTP is ${otp}. It is valid for 5 minutes. Do not share it with anyone.`
-    });
+    await sendOtpEmail(user.email, otp);
 
     res.json({
       message: "If your account exists, an OTP will be sent."
@@ -72,9 +87,9 @@ router.post("/forgot-password", async (req, res) => {
     });
   }
 });
+
 // Reset Password - Verify OTP and Update Password
 router.post("/reset-password", async (req, res) => {
-  console.log("FORGOT PASSWORD API CALLED");
   try {
     const { email, otp, newPassword } = req.body;
 
@@ -143,8 +158,10 @@ router.post("/reset-password", async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Reset Password Error:", error.message);
+
     res.status(500).json({
-      message: error.message
+      message: "Something went wrong"
     });
   }
 });
