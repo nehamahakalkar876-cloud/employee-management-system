@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import "./App.css";
 
 const API_URL = "https://employee-management-system-7gv1.onrender.com";
-
 function App() {
   const [employees, setEmployees] = useState([]);
 
@@ -32,6 +31,12 @@ function App() {
     password: "",
   });
 
+  // Forgot Password states
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetStep, setResetStep] = useState(1);
+
   const emptyEmployee = {
     name: "",
     email: "",
@@ -45,7 +50,12 @@ function App() {
   // Get Employees from MongoDB
   async function fetchEmployees() {
     try {
-      const response = await fetch(`${API_URL}/api/employees`);
+      const response = await fetch(`${API_URL}/api/employees`, {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {},
+      });
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -62,6 +72,7 @@ function App() {
     if (token) {
       fetchEmployees();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // Registration
@@ -101,6 +112,80 @@ function App() {
         password: "",
       });
 
+      setPage("login");
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+
+  // Send OTP for Forgot Password
+  async function sendOtp(e) {
+    e.preventDefault();
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: forgotEmail.trim().toLowerCase(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Unable to send OTP");
+      }
+
+      alert(data.message || "If your account exists, an OTP will be sent.");
+      setResetStep(2);
+    } catch (error) {
+      alert(error.message);
+    }
+  }
+
+  // Verify OTP and reset password
+  async function resetPassword(e) {
+    e.preventDefault();
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      alert("Please enter the 6-digit OTP.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      alert("New password must contain at least 6 characters.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: forgotEmail.trim().toLowerCase(),
+          otp: otp.trim(),
+          newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Password reset failed");
+      }
+
+      alert("Password reset successful! Please login.");
+
+      setForgotEmail("");
+      setOtp("");
+      setNewPassword("");
+      setResetStep(1);
+      setLoginData({ email: "", password: "" });
       setPage("login");
     } catch (error) {
       alert(error.message);
@@ -186,6 +271,7 @@ function App() {
         method: editingId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updatedData),
       });
@@ -235,6 +321,9 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/api/employees/${id}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       const data = await response.json();
@@ -250,50 +339,65 @@ function App() {
     }
   }
 
-  // Login Page
+  // Authentication pages
   if (!loggedIn) {
     return (
       <div className="auth-container">
-        <form className="auth-card" onSubmit={login}>
-          <h1>Employee Management</h1>
-          <p>Welcome Back! Please Login</p>
 
-          <input
-            type="email"
-            placeholder="Email Address"
-            required
-            value={loginData.email}
-            onChange={(e) =>
-              setLoginData({ ...loginData, email: e.target.value })
-            }
-          />
+        {/* Login Page */}
+        {page === "login" && (
+          <form className="auth-card" onSubmit={login}>
+            <h1>Employee Management</h1>
+            <p>Welcome Back! Please Login</p>
 
-          <input
-            type="password"
-            placeholder="Password"
-            required
-            value={loginData.password}
-            onChange={(e) =>
-              setLoginData({ ...loginData, password: e.target.value })
-            }
-          />
+            <input
+              type="email"
+              placeholder="Email Address"
+              required
+              value={loginData.email}
+              onChange={(e) =>
+                setLoginData({ ...loginData, email: e.target.value })
+              }
+            />
 
-          <button type="submit">Login</button>
+            <input
+              type="password"
+              placeholder="Password"
+              required
+              value={loginData.password}
+              onChange={(e) =>
+                setLoginData({ ...loginData, password: e.target.value })
+              }
+            />
 
-          <p>
-            Don't have an account?{" "}
-            <span onClick={() => setPage("register")}>
-              Register Here
-            </span>
-          </p>
+            <button type="submit">Login</button>
 
-          {page === "register" && (
             <p>
-              Please use the registration form below.
+              <span
+                onClick={() => {
+                  setForgotEmail(loginData.email);
+                  setResetStep(1);
+                  setPage("forgot");
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                Forgot Password?
+              </span>
             </p>
-          )}
-        </form>
 
+            <p>
+              Don't have an account?{" "}
+              <span
+                onClick={() => setPage("register")}
+                style={{ cursor: "pointer" }}
+              >
+                Register Here
+              </span>
+            </p>
+          </form>
+        )}
+
+        {/* Registration Page */}
         {page === "register" && (
           <form className="auth-card" onSubmit={register}>
             <h1>Employee Registration</h1>
@@ -334,8 +438,95 @@ function App() {
 
             <p>
               Already have an account?{" "}
-              <span onClick={() => setPage("login")}>
+              <span
+                onClick={() => setPage("login")}
+                style={{ cursor: "pointer" }}
+              >
                 Login Here
+              </span>
+            </p>
+          </form>
+        )}
+
+        {/* Forgot Password Page */}
+        {page === "forgot" && (
+          <form
+            className="auth-card"
+            onSubmit={resetStep === 1 ? sendOtp : resetPassword}
+          >
+            <h1>Forgot Password</h1>
+
+            {resetStep === 1 ? (
+              <>
+                <p>Enter your registered email to receive an OTP.</p>
+
+                <input
+                  type="email"
+                  placeholder="Registered Email Address"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                />
+
+                <button type="submit">Send OTP</button>
+              </>
+            ) : (
+              <>
+                <p>
+                  Enter the 6-digit OTP sent to your registered email and set a
+                  new password.
+                </p>
+
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  required
+                  maxLength={6}
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={(e) =>
+                    setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                />
+
+                <input
+                  type="password"
+                  placeholder="New Password (minimum 6 characters)"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+
+                <button type="submit">Reset Password</button>
+
+                <p>
+                  Didn't receive OTP?{" "}
+                  <span
+                    onClick={() => {
+                      setOtp("");
+                      setResetStep(1);
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
+                    Try again
+                  </span>
+                </p>
+              </>
+            )}
+
+            <p>
+              Remember your password?{" "}
+              <span
+                onClick={() => {
+                  setPage("login");
+                  setResetStep(1);
+                  setOtp("");
+                  setNewPassword("");
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                Back to Login
               </span>
             </p>
           </form>
@@ -362,9 +553,7 @@ function App() {
         <aside className="sidebar">
           <h3>Dashboard</h3>
 
-          <button onClick={() => setPage("dashboard")}>
-            Home
-          </button>
+          <button onClick={() => setPage("dashboard")}>Home</button>
 
           <button
             onClick={() => {
@@ -387,6 +576,8 @@ function App() {
         </aside>
 
         <main className="content">
+
+          {/* Dashboard Home */}
           {page === "dashboard" && (
             <>
               <h1>Dashboard</h1>
@@ -420,6 +611,7 @@ function App() {
             </>
           )}
 
+          {/* Add / Edit Employee */}
           {page === "add" && (
             <>
               <h1>
@@ -461,6 +653,7 @@ function App() {
                   value={employeeData.phone}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, "");
+
                     setEmployeeData({
                       ...employeeData,
                       phone: value,
@@ -501,6 +694,7 @@ function App() {
             </>
           )}
 
+          {/* Employee List */}
           {page === "list" && (
             <>
               <h1>Employee List</h1>
@@ -536,7 +730,6 @@ function App() {
                         <td>{emp.phone}</td>
                         <td>{emp.department}</td>
                         <td>{emp.designation}</td>
-
                         <td>
                           <button
                             className="edit"
@@ -558,7 +751,9 @@ function App() {
                 </table>
 
                 {employees.length === 0 && (
-                  <p className="empty">No employees added yet.</p>
+                  <p className="empty">
+                    No employees added yet.
+                  </p>
                 )}
               </div>
             </>
