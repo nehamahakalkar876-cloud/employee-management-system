@@ -72,6 +72,8 @@ router.post("/forgot-password", async (req, res) => {
     user.resetOtpAttempts = 0;
 
     await user.save();
+    console.log("Sending OTP through Brevo...");
+    
 
     await sendOtpEmail(user.email, otp);
 
@@ -106,9 +108,10 @@ router.post("/reset-password", async (req, res) => {
     }
 
     const user = await User.findOne({
+      
       email: email.toLowerCase()
     });
-
+console.log("User found in database:", !!user);
     if (!user || !user.resetOtpHash || !user.resetOtpExpires) {
       return res.status(400).json({
         message: "Invalid or expired OTP"
@@ -215,6 +218,7 @@ router.post("/login", async (req, res) => {
     const user = await User.findOne({
       email: email?.toLowerCase()
     });
+    console.log("User found in database:", !!user);
 
     if (!user) {
       return res.status(400).json({
